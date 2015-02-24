@@ -1,5 +1,9 @@
 import hashlib
+import pybitcointools
+
+pbtc=pybitcointools
 hs=hashlib
+fails=0
 
 def print_registers(vm):
     print "     Register a = " + str(vm.reg_a)
@@ -46,6 +50,7 @@ class BlockMachine(object):
     def i_exec(self, reg, op, *args):
         setattr(self, reg, getattr(self, 'o_'+op)(*args))
 
+    #Test to see if it an operation or not, if it is set flags
     def i_test(self, op, *rest):
         if getattr(self, 'o_'+op)(*rest):
             self.flag = True
@@ -56,8 +61,10 @@ class BlockMachine(object):
     def i_branch(self, line):
         if self.flag: self.pc = line
 
+    #Jumps the code pointer to the specified line number 0 = first line
     def i_jump(self, line):
         self.pc = line
+
     #Checks to see if the given register is 0
     def o_zero(self, reg):
         return getattr(self, reg) == 0
@@ -70,9 +77,15 @@ class BlockMachine(object):
     def i_clr(self, a):
         setattr(self, a, None)
 
+    #Generates a private key given a register and leaves the key in that register
+    def i_pvtkey(self, a):
+        priv_key = pbtc.random_key()
+        setattr(self, a, priv_key)
+
     #Sets the given register to 0
     def i_zro(self, a):
         setattr(self, a, 0)
+
     #Checks if a is less than b
     def o_lt(self, a, b):
         return getattr(self, a) < getattr(self, b)
@@ -115,6 +128,24 @@ class BlockMachine(object):
         temp = str(temp)
         return hs.sha256(temp).hexdigest()
 
+#Bitcoin Key generation
+def key_test():
+    prog_description = "Clears a given register with None data"
+
+    vm = BlockMachine((
+        ('pvtkey', 'reg_a'),                    # Create a private key and store it in register a
+        ('copy', 'reg_t', 'reg_a'),             # Copy the private key in register A to register T
+        ('jump', None),                         # Exit the program
+        ), prog_description)
+    vm.execute()
+    privatekey = str(vm.reg_a)
+    publickey = pbtc.privtopub(privatekey)
+    address = pbtc.pubtoaddr(publickey)
+    print "Private Key: " + privatekey
+    print "Public Key: " + publickey
+    print "Address: " + address
+
+#Test for sha256
 def hashtesting():
     prog_description = "Returns a SHA256 of a given register as the result"
 
@@ -125,21 +156,60 @@ def hashtesting():
         ('jump', None),
         ), prog_description)
 
-    # Set our Registers for the Addition program to act upon
     vm.reg_a = 1
 
-    #Printing output for testing
-    print_bars()
-    print "Description: " + vm.program_description
-    print_bars()
-    print_registers(vm)
-    print_bars()
-    print "Executing: " + vm.program_as_string
-    print_bars()
     vm.execute()
-    print_registers(vm)
-    print_bars()
 
+    if not vm.reg_t == '6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b':
+        global fails
+        fails+=1
+        print "FAILURE: sha256 Test has failed"
+
+#Test to verify the clr function works
+def clr_test():
+    prog_description = "Clears a given register with None data"
+
+    vm = BlockMachine((
+        ('clr', 'reg_b'),
+        ('clr', 'reg_a'),
+        ('clr', 'reg_t'),
+        ('jump', None),
+        ), prog_description)
+
+    vm.reg_a = 10
+    vm.reg_b = 10
+    vm.reg_t = 10
+
+    vm.execute()
+
+    if not vm.reg_t== None and vm.reg_a == None and vm.reg_b == None:
+        global fails
+        fails+=1
+        print "FAILURE: clr Test has failed"
+
+#Test to verify the zro function works by setting all registers to 0
+def zro_test():
+    prog_description = "Clears a given register with 0 as the register value"
+
+    vm = BlockMachine((
+        ('zro', 'reg_b'),
+        ('zro', 'reg_a'),
+        ('zro', 'reg_t'),
+        ('jump', None),
+        ), prog_description)
+
+    vm.reg_a = 10
+    vm.reg_b = 10
+    vm.reg_t = 10
+
+    vm.execute()
+
+    if not vm.reg_t== 0 and vm.reg_a == 0 and vm.reg_b == 0:
+        global fails
+        fails+=1
+        print "FAILURE: zro Test has failed"
+
+#Test to verify that multiplication works
 def multiplication_test():
     prog_description = "Multiplies two registers together and returns the result"
 
@@ -151,25 +221,39 @@ def multiplication_test():
         ('jump', None),
         ), prog_description)
 
-    # Set our Registers for the Addition program to act upon
     vm.reg_a = 10
     vm.reg_b = 10
 
-    #Printing output for testing
-    print_bars()
-    print "Description: " + vm.program_description
-    print_bars()
-    print_registers(vm)
-    print_bars()
-    print "Executing: " + vm.program_as_string
-    print_bars()
     vm.execute()
-    print_registers(vm)
-    print_bars()
 
     if not vm.reg_t==100:
+        global fails
+        fails+=1
         print "FAILURE: Multiplication Test has failed"
 
+#Test to verify that power works
+def pow_test():
+    prog_description = "Takes a given register to the other given register and takes it to the power"
+
+    vm = BlockMachine((
+        ('copy', 'reg_t', 'reg_a'),
+        ('exec', 'reg_t', 'pow', 'reg_t', 'reg_b'),
+        ('clr', 'reg_b'),
+        ('clr', 'reg_a'),
+        ('jump', None),
+        ), prog_description)
+
+    vm.reg_a = 10
+    vm.reg_b = 3
+
+    vm.execute()
+
+    if not vm.reg_t==1000:
+        global fails
+        fails+=1
+        print "FAILURE: Power Test has failed"
+
+#Test to verify that division works
 def division_test():
     prog_description = "Divides two registers and returns the result"
 
@@ -183,25 +267,17 @@ def division_test():
         ('jump', None),
         ), prog_description)
 
-    # Set our Registers for the Addition program to act upon
     vm.reg_a = 10
     vm.reg_b = 1
 
-    #Printing output for testing
-    print_bars()
-    print "Description: " + vm.program_description
-    print_bars()
-    print_registers(vm)
-    print_bars()
-    print "Executing: " + vm.program_as_string
-    print_bars()
     vm.execute()
-    print_registers(vm)
-    print_bars()
 
     if not vm.reg_t==10:
+        global fails
+        fails+=1
         print "FAILURE: Division Test has failed"
 
+#Test to verify that addition works
 def addition_test():
     prog_description = "Adds two registers together and returns the result"
 
@@ -213,25 +289,17 @@ def addition_test():
         ('jump', None),
         ), prog_description)
 
-    # Set our Registers for the Addition program to act upon
     vm.reg_a = 12
     vm.reg_b = 30
 
-    #Printing output for testing
-    print_bars()
-    print "Description: " + vm.program_description
-    print_bars()
-    print_registers(vm)
-    print_bars()
-    print "Executing: " + vm.program_as_string
-    print_bars()
     vm.execute()
-    print_registers(vm)
-    print_bars()
 
     if not vm.reg_t == 42:
+        global fails
+        fails+=1
         print "FAILURE: Addition Test has failed"
 
+#Test to verify subtraction works
 def subtraction_test():
     prog_description = "Adds two registers together and returns the result"
 
@@ -243,25 +311,17 @@ def subtraction_test():
         ('jump', None),
         ), prog_description)
 
-    # Set our Registers for the Addition program to act upon
     vm.reg_a = 30
     vm.reg_b = 12
 
-    #Printing output for testing
-    print_bars()
-    print "Description: " + vm.program_description
-    print_bars()
-    print_registers(vm)
-    print_bars()
-    print "Executing: " + vm.program_as_string
-    print_bars()
     vm.execute()
-    print_registers(vm)
-    print_bars()
 
     if not vm.reg_t == 18:
+        global fails
+        fails+=1
         print "FAILURE: Subtraction Test has failed"
 
+#Test to verify that increment and decrement works
 def increment_decrement_test():
     prog_description = "Increments a given register by 1 then decrements it by 1"
 
@@ -273,25 +333,21 @@ def increment_decrement_test():
         ('jump', None),
         ), prog_description)
 
-    # Set our Registers for the Addition program to act upon
     vm.reg_a = 0
 
-    #Printing output for testing
-    print_bars()
-    print "Description: " + vm.program_description
-    print_bars()
-    print_registers(vm)
-    print_bars()
-    print "Executing: " + vm.program_as_string
-    print_bars()
     vm.execute()
-    print_registers(vm)
-    print_bars()
 
     if not vm.reg_t == 0:
+        global fails
+        fails+=1
         print "FAILURE: Increment Test has failed"
 
-def test():
+#Test all the functions with simple programs verifying register ouput
+def tests():
+    #Run all the tests
+    key_test()
+    zro_test()
+    clr_test()
     addition_test()
     multiplication_test()
     hashtesting()
@@ -299,4 +355,15 @@ def test():
     increment_decrement_test()
     division_test()
 
-test()
+    #Grab the global fails variable and report the pass/failure
+    global fails
+    print_bars()
+    if not fails == 0:
+        print "Failure: " + str(fails) + " test(s) have failed."
+    else:
+        print "Success: All tests have passed."
+    print_bars()
+
+
+#Execute all tests
+tests()

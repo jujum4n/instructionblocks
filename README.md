@@ -11,17 +11,20 @@ v0.0.1
 
 ### Technology
 
-Instruction Blocks uses a number of open source projects to work properly:
+Instruction Blocks uses a number of open source projects to work at a high level you will need:
 
 * [Blockstore] - Using Blockstored server
 * [Bitcoin] - Bitcoin Core for bitcoind node
+* [Instruction Blocks] - InstructionBlocks functions
+* [pybitcointools] - Vbuterins Pybitcointools for address generation / validation functions Could be replaced with RPC calls
 
 ### Installation
 
-You need: Python 2.7.x, Blockstored, Bitcoind node
+You need: Python 2.7.x, Blockstored, fully updated valid Bitcoind node,
 
 ```sh
 $ pip install Blockstore
+$ pip install pybitcointools
 $ pip install InstructionBlocks
 ```
 ### Usage
